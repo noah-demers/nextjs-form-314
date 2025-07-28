@@ -6,6 +6,7 @@ import {
   hobbyKeys,
   levelKeys,
   majorKeys,
+  instructorKeys,
   gpaValues,
 } from '@/lib/validationSchemas';
 import { Button, ButtonGroup, Card, Col, Container, Form, Row } from 'react-bootstrap';
@@ -14,6 +15,9 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import Multiselect from 'multiselect-react-dropdown';
 import { upsertStudent } from '@/lib/dbActions';
 import swal from 'sweetalert';
+
+// Option 2 workaround: cast resolver as any to avoid TS error on enrolled Date type
+const resolver = yupResolver(EditStudentSchema) as any;
 
 const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
   console.log('EditStudentForm: ', student.email, student); // Show client-side email.
@@ -26,28 +30,25 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
     reset,
     formState: { errors },
     watch,
-  } = useForm({
-    resolver: yupResolver(EditStudentSchema),
+  } = useForm<ICreateStudentForm>({
+    resolver,
+    defaultValues: student,
   });
 
   let watchMajor = watch('major');
   if (!watchMajor) {
     watchMajor = student.major;
   }
-  const enrolledDateString = student.enrolled?.toISOString().split('T')[0];
-  // console.log('EditStudentForm: ', enrolledDateString);
 
-  const onSubmit = async (data: {
-    email: string;
-    bio?: string;
-    level: string;
-    gpa: number;
-    major?: string | undefined;
-    name: string;
-    hobbies?: (string | undefined)[] | undefined;
-    enrolled?: Date | undefined;
-  }) => {
-    const result = await upsertStudent(data as ICreateStudentForm);
+  let watchInstructor = watch('instructor');
+  if (!watchInstructor) {
+    watchInstructor = student.instructor;
+  }
+
+  const enrolledDateString = student.enrolled?.toISOString().split('T')[0];
+
+  const onSubmit = async (data: ICreateStudentForm) => {
+    const result = await upsertStudent(data);
     if (result) {
       swal('Success!', 'Student data saved successfully!', 'success');
     } else {
@@ -91,7 +92,7 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
             <Row className={formPadding}>
               <Form.Group controlId="formBio">
                 <Form.Label>Biographical Statement</Form.Label>
-                <Form.Control as="textarea" defaultValue={student.bio ? student.bio : ''} {...register('bio')} />
+                <Form.Control as="textarea" defaultValue={student.bio ?? ''} {...register('bio')} />
                 <Form.Text muted>(optional)</Form.Text>
               </Form.Group>
             </Row>
@@ -108,11 +109,7 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                     className={`form-control ${errors.level ? 'is-invalid' : ''}`}
                   >
                     {levelKeys.map((level) => (
-                      <option
-                        key={level}
-                        value={level}
-                        // selected={student.level === level}
-                      >
+                      <option key={level} value={level}>
                         {level}
                       </option>
                     ))}
@@ -127,13 +124,13 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                     GPA
                     <Form.Text style={{ color: 'red' }}>*</Form.Text>
                   </Form.Label>
-                  <Form.Select {...register('gpa')} defaultValue={student.gpa}>
+                  <Form.Select
+                    {...register('gpa')}
+                    defaultValue={student.gpa}
+                    className={`form-control ${errors.gpa ? 'is-invalid' : ''}`}
+                  >
                     {gpaValues.map((gpa, index) => (
-                      <option
-                        key={gpa}
-                        value={index}
-                        // selected={student.gpa === index}
-                      >
+                      <option key={gpa} value={index}>
                         {gpa}
                       </option>
                     ))}
@@ -164,7 +161,7 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                 <Controller
                   control={control}
                   name="hobbies"
-                  render={({ field: { onChange } }) => (
+                  render={({ field: { onChange, value } }) => (
                     <Multiselect
                       options={hobbyKeys}
                       isObject={false}
@@ -173,7 +170,7 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                       closeOnSelect={false}
                       onSelect={onChange}
                       onRemove={onChange}
-                      selectedValues={student.hobbies}
+                      selectedValues={value ?? student.hobbies}
                     />
                   )}
                 />
@@ -195,9 +192,9 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                       type="radio"
                       label={major}
                       id={major}
-                      defaultValue={major}
-                      checked={watchMajor === major}
+                      value={major}
                       {...register('major')}
+                      checked={watchMajor === major}
                     />
                   ))}
                 </ButtonGroup>
@@ -205,6 +202,33 @@ const EditStudentForm = ({ student }: { student: ICreateStudentForm }) => {
                 <Form.Text>What is your major?</Form.Text>
               </Form.Group>
             </Row>
+
+            <Row className={formPadding}>
+              <Form.Group controlId="formInstructor">
+                <Form.Label>
+                  Instructor
+                  <Form.Text style={{ color: 'red' }}>*</Form.Text>
+                  &nbsp;
+                </Form.Label>
+                <ButtonGroup className={`form-control ${errors.instructor ? 'is-invalid' : ''}`}>
+                  {instructorKeys.map((instructor) => (
+                    <Form.Check
+                      key={instructor}
+                      inline
+                      type="radio"
+                      label={instructor}
+                      id={instructor}
+                      value={instructor}
+                      {...register('instructor')}
+                      checked={watchInstructor === instructor}
+                    />
+                  ))}
+                </ButtonGroup>
+                <div className="invalid-feedback">{errors.instructor?.message}</div>
+                <Form.Text>Choose your instructor</Form.Text>
+              </Form.Group>
+            </Row>
+
             <Button variant="primary" type="submit">
               Update
             </Button>
